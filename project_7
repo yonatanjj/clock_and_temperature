@@ -1,0 +1,425 @@
+#include "mbed.h"
+#include "TextLCD.h"
+#include <string>
+#include <cstdio>
+#include <DigitalIn.h>
+#include <iostream>
+
+using namespace std;
+
+//****Obejective: write a code that will tell time on an LCD screen controlled by a
+// mcu. The user will enter enter the time in hour and minutes and select if AM or PM.
+// The screen will also display the degrees in Fahrenheit or Celsius. The user will
+// have the option to switch between Fahrenheit and Celsius with an Analogin API.
+// Note: this code is specific to an mbed MCU, NUCLEO-F401RE***/
+
+DigitalOut ROW1(PA_7);
+DigitalOut ROW2(PB_6);
+DigitalOut ROW3(PC_7);
+DigitalOut ROW4(PA_9);
+
+DigitalIn COL1(PA_8, PullUp);
+DigitalIn COL2(PB_10, PullUp);
+DigitalIn COL3(PB_4, PullUp);
+DigitalIn COL4(PB_5, PullUp);
+
+AnalogIn   ain(PA_6); // Temperature sensor
+
+InterruptIn mybutton(PB_1); // Change between Celsius and Fahrenheit
+DigitalOut led(LED1);
+
+TextLCD lcd(PA_0, PA_1, PA_4, PB_0, PC_1, PC_0);  
+//TextLCD format: object(RS, E, DB4, DB5, DB6, DB7);
+
+int choice = 15, symbol = 0; 
+//button A=1, B=2, C=3, D=4, *=5, #=6 on key bad
+
+int c, f, Temp; 
+string fah("F"), cel("C"), Tdisplay = cel;
+
+int setsec = 0, h = 1, setmin = 0;               // variables for holding time values
+string am("AM"), pm("PM"), daynight;             // displays am or pm
+
+void scan_button() // scan through buttons of the keypad
+{
+    ROW1 = 0, ROW2 = 1, ROW3 = 1, ROW4 = 1;    // Sets logic state of ROW1 to 0
+    while(ROW1 == 0)
+    {
+            if(COL1 == ROW1){      // button 1
+                printf("Button pressed is 1\n"); ThisThread::sleep_for(150);
+                choice = 1;
+                }
+            if(COL2 == ROW1){     // button 2
+                printf("Button pressed is 2\n"); ThisThread::sleep_for(150);
+                choice = 2;
+                } 
+            if(COL3 == ROW1){      // button 3
+                printf("Button pressed is 3\n"); ThisThread::sleep_for(150);
+                choice = 3;
+                } 
+            if(COL4 == ROW1){       // button A
+                printf("Button pressed is A\n"); ThisThread::sleep_for(150);
+                symbol = 1;
+                } 
+        ROW1 = 1;  
+    }
+
+    ROW1 = 1, ROW2 = 0, ROW3 = 1, ROW4 = 1;   // Sets logic state of ROW2 to 0
+    while(ROW2 == 0)
+    {
+            if(COL1 == ROW2){    // button 4
+                printf("Button pressed is 4\n"); ThisThread::sleep_for(150);
+                choice = 4;
+                }
+            if(COL2 == ROW2){    // button 5
+                printf("Button pressed is 5\n"); ThisThread::sleep_for(150);
+                choice = 5;
+                }
+            if(COL3 == ROW2){    // button 6
+                printf("Button pressed is 6\n"); ThisThread::sleep_for(150);
+                choice = 6;
+                }
+            if(COL4 == ROW2){    // button B
+                printf("Button pressed is B\n"); ThisThread::sleep_for(150);
+                symbol = 2;
+                }
+        ROW2 = 1;
+    }
+
+    ROW1 = 1, ROW2 = 1, ROW3 = 0, ROW4 = 1;   // Sets logic state of ROW3 to 0
+    while(ROW3 == 0)
+    {
+            if(COL1 == ROW3){    // button 7              
+                printf("Button pressed is 7\n"); ThisThread::sleep_for(150);
+                choice = 7;
+                }  
+            if(COL2 == ROW3){    // button 8
+                printf("Button pressed is 8\n"); ThisThread::sleep_for(150);
+                choice = 8;
+                }
+            if(COL3 == ROW3){    // button 9
+                printf("Button pressed is 9\n"); ThisThread::sleep_for(150);
+                choice = 9;
+                }
+            if(COL4 == ROW3){    // button C
+                printf("Button pressed is C\n"); ThisThread::sleep_for(150);
+                symbol = 3;
+                }
+                 
+        ROW3 = 1;
+    }
+
+    ROW1 = 1, ROW2 = 1, ROW3 = 1, ROW4 = 0;     // Sets logic state of ROW4 to 0
+    while(ROW4 == 0)
+    {
+            if(COL1 == ROW4){       // button *
+                printf("Button pressed is *\n"); ThisThread::sleep_for(150);
+                symbol = 5;
+                }
+            if(COL2 == ROW4){       // button 0
+                printf("Button pressed is 0\n"); ThisThread::sleep_for(150);
+                choice = 0;
+                }
+            if(COL3 == ROW4){       // button #
+                printf("Button pressed is #\n"); ThisThread::sleep_for(150);
+               symbol = 6;
+                }
+            if(COL4 == ROW4){       // button D
+                printf("Button pressed is D\n"); ThisThread::sleep_for(150);
+                symbol = 4;
+                }
+        ROW4 = 1;
+    }
+}
+
+void cont()    // When # is pressed to move on to the next input
+{
+    while(1)
+    { 
+      scan_button();
+        if(symbol == 6)
+        {
+        choice = 15;
+        symbol = 0;
+        break;
+        }
+    }
+}
+
+void set_mode() // allows user to input time
+{
+    h = 0;
+    lcd.cls();
+    lcd.printf("%02i:%02i:%02i\n", h, setmin, setsec); // displays 0 time
+    lcd.printf("HOUR"); // prompts user to enter the hour
+
+    while(1)  // Loop for the first digit of the hour 
+    {
+        scan_button();
+            // prints either 0 or 1 for the 1st digit of the hour
+        if(choice <= 1)  
+            {
+                h = choice;
+                lcd.cls();
+                lcd.printf("%02i\n", h); 
+                lcd.printf("HOUR"); 
+                ThisThread::sleep_for(150);
+                choice = 15;
+                break;
+            }
+            // prints error if buttons other than 0 or 1 are pressed
+        if ((choice > 1 && choice < 10) || symbol > 0)
+            {
+                lcd.cls();
+                lcd.printf("ERROR"); 
+                choice = 15;
+                symbol = 0;
+                ThisThread::sleep_for(2000);
+                return set_mode(); // return to beginning of function
+            }
+    }
+    while (1)  // Loop for the second digit of the hour
+    {
+        scan_button();
+
+        if(choice >= 0 && choice <= 9) // Buttons between 0 and 9 are pressed
+        {
+            if(h == 0)
+            {
+                if(choice > 0) // if 1st digit is 0, 2nd digit is > than 0
+                {
+                    h = choice;
+                    lcd.cls();
+                    lcd.printf("%02i", h); // prints hour between 1 and 9
+                    choice = 15;
+                    break;
+                }
+
+                if(choice < 1) // 2nd digit is 0, print error
+                {
+                    lcd.cls();
+                    lcd.printf("ERROR");
+                    h = 0;
+                    choice = 15;
+                    ThisThread::sleep_for(2000);
+                    return set_mode(); // return to beginning of function
+                }
+            }
+            
+            if(h == 1)
+            {
+                if(choice < 3) // 2nd digit is between 0 and 2 if 1st digit is 1
+                    {
+                        h = choice + 10;
+                        lcd.cls();
+                        lcd.printf("%02i", h); // prints hour between 10 and 12
+                        choice = 15;
+                        break;
+                    }
+
+                if (choice > 2 && choice < 10) // 2nd digit is between 3 and 9 if print error
+                    {
+                        lcd.cls();
+                        lcd.printf("ERROR");
+                        h = 0;
+                        choice = 15;
+                        ThisThread::sleep_for(2000);
+                        return set_mode();  // return to beginning of function
+                    }
+            }
+        }
+    }
+    
+    choice = 15;
+    symbol = 0;
+
+    cont();  // # to continue
+
+    stacy:  // To restart loop for minutes when error
+
+    lcd.cls();
+    lcd.printf("%02i:%02i:%02i\n", h, setmin, setsec);
+    lcd.printf("MIN");
+
+    while(1)  // Loop for the first digit of minutes
+    {
+        scan_button();
+
+        if(choice <= 5) // 1st digit between 0 and 5
+        {
+            setmin = choice;
+            lcd.cls();
+            lcd.printf("%02i", setmin);
+            ThisThread::sleep_for(150);
+            choice = 15;
+            break;
+        }
+            // 1st digit out of 0 and 5, print error
+        if (choice > 5 && choice < 10 || symbol > 0)
+        {
+            lcd.cls();
+            lcd.printf("ERROR");
+            choice = 15;
+            symbol = 0;
+            ThisThread::sleep_for(2000);
+            goto stacy;         // go to beginning of while loop
+        }
+    }
+
+    while (1)  // Loop for the second digit of minutes
+    {
+        scan_button();
+
+        if(choice < 10)  // Print minutes if between 0 and 9
+            {
+                setmin = setmin * 10;
+                setmin = setmin + choice;
+                lcd.cls();
+                lcd.printf("%02i", setmin);
+                choice = 15;
+                break;
+            }
+        if (symbol > 0) // print error if any other buttons are pressed
+            {
+                lcd.cls();
+                lcd.printf("ERROR");
+                choice = 15;
+                symbol = 0;
+                ThisThread::sleep_for(2000);
+                goto stacy;  // go to beginning of 2 while loop back
+            }
+    }
+
+    cont();  // # to continue
+
+    lcd.cls();
+    lcd.printf("%02i:%02i:%02i\n", h, setmin, setsec); // print hour, time, and seconds from user
+    lcd.printf("AM = A or PM = B");   // Prompt user to input AM or PM
+
+    while(1)  // User to input am or pm
+    {
+        scan_button();
+
+        if(symbol == 1) // print am if A is pressed
+            {
+            daynight = am;
+            lcd.cls();
+            // prints the time in am
+            lcd.printf("%02i:%02i:%02i %s\n", h, setmin, setsec, daynight.c_str());   
+            symbol = 0;
+            break;
+            } 
+        if(symbol == 2) // print pm if B is pressed
+            {
+            daynight = pm;
+            lcd.cls();
+            // prints the time in pm
+            lcd.printf("%02i:%02i:%02i %s\n", h, setmin, setsec, daynight.c_str());
+            symbol = 0; 
+            break;
+            } 
+    }
+    symbol = 0;
+    choice = 0;
+}
+
+void temp_check() // read temperature
+{
+   float voltage, millivolt, TempC, TempF;
+    { 
+        voltage = ain.read(); // read in voltage from temperature sensor
+        
+        millivolt = (voltage) * 3.3 * 1000.0; // calculate millivolts
+
+        TempC = millivolt/10;     // calculate temperature for Celsius
+        TempF = (TempC * 9.0/5.0)+32; // calculate temprature for Fahrenheit
+        c = TempC;
+        f = TempF;
+
+        if(Tdisplay == cel)
+            {
+             Temp = c;
+            }
+    }
+}
+
+void button_pressed() // switch temperature between Celcius and Fahrenheit
+{ 
+    while(1)
+    {
+    if(Tdisplay == fah) // dispaly Celcius
+        {
+            Tdisplay = cel;
+            Temp = c;
+            break;
+        }
+    if(Tdisplay == cel) // display Fahrenheit
+        {
+            Tdisplay = fah;
+            Temp = f;
+            break;
+        }
+    }
+}
+
+void normal_mode() // clock operation
+{
+    int min, hr, sec;
+    symbol = 0;
+
+    while (1) // Loop to run clock
+    {
+        hour:
+        for(hr = h; hr < 13; hr++) // loop hour between 1 and 12
+        {
+          h = 1;
+            for (min = setmin; min < 60; min++) // loop minutes between 0 and 59
+            {
+                setmin = 0;
+                for(sec = 0; sec < 60; sec++) // // loop seconds between 0 and 59
+                {
+                temp_check(); // function call temperature reading
+                lcd.cls();
+                lcd.printf("%02i:%02i:%02i %s" , hr, min, sec, daynight.c_str()); // print time
+                lcd.printf(" %02i %s\n", Temp, Tdisplay.c_str());  // print temperature
+                scan_button();
+                    if(symbol == 5) // when * is pressed, go to set mode function
+                        {
+                            choice = 15;
+                            symbol = 0;
+                            return set_mode();
+                        }
+                ThisThread::sleep_for(992); // calculated ratio of LCD time to real time
+                }
+            }
+                if(hr == 11 && min == 60 && sec == 60) // converts between am and pm for time
+                        {
+                            if(daynight == am) // change to pm after 11:59 am
+                                {
+                                    daynight = pm;
+                                    h = 12;
+                                    goto hour;
+                                }
+                            if(daynight == pm) // change to am after 11:59 pm
+                                {
+                                    daynight = am;
+                                    h = 12;
+                                    goto hour;
+                                }
+                        } 
+        }
+    }
+}
+
+
+// main() runs in its own thread in the OS
+int main()
+{   
+    lcd.printf("hello");
+    daynight = am; // time set to am when program starts in normal mode
+    
+    mybutton.fall(&button_pressed); //changes between C and F when button pressed
+    backup:
+    normal_mode(); // runs the normal operation of the clock
+    goto backup; // returns to normal mode after set mode
+}
